@@ -1,171 +1,223 @@
-# FYERS Trading API Integration
+# FYERS Broker Integration Microservice
 
-A Node.js application that integrates with FYERS API V3 for algorithmic trading, providing endpoints for historical data, real-time market updates, and order management.
+A production-ready Node.js microservice that integrates with the FYERS Trading API V3 to support multi-user algorithmic trading. It handles authentication, market data access, and order execution.
 
-## Features
+---
 
-- 📊 **Market Data**
-  - Historical data retrieval
-  - Real-time market updates via WebSocket
-- 💰 **Order Management**
-  - Place new orders
-  - Modify existing orders
-  - Cancel orders
-- 🔐 **Authentication**
-  - Secure API integration
-  - Environment-based configuration
+## 🚀 Features
 
-## Quick Start
+### 📊 Market Data
+
+- Historical OHLC data (with candle resolution)
+- WebSocket-based live market updates
+
+### 💰 Order Management
+
+- Place orders (Market/Limit/SL)
+- Easy integration with scheduling logic for auto-trading
+
+### 🔐 Secure Authentication
+
+- Fyers OAuth 2.0 integration
+- Token exchange and auto-storage per user
+
+### 🧩 Microservice Architecture
+
+- Works standalone or as part of a full-stack trading platform
+- Supports MongoDB for user/token/strategy persistence
+
+---
+
+## ⚙️ Quick Start
 
 ### Prerequisites
 
-- Node.js >= 12.0.0
-- FYERS Trading Account
-- API Credentials from [FYERS API Dashboard](https://myapi.fyers.in/dashboard)
+- Node.js >= 18
+- MongoDB (local or Atlas)
+- FYERS Trading Account + App Credentials
 
-### Installation
+### Setup
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/fyers-trading-api.git
-   cd fyers-trading-api
-   ```
+1. **Clone the repo**
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+```bash
+git clone https://github.com/yourusername/broker-integration.git
+cd broker-integration/services/broker-integration
+```
 
-3. Configure environment:
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` with your FYERS credentials:
-   ```
-   FYERS_APP_ID=your_app_id
-   FYERS_ACCESS_TOKEN=your_access_token
-   ```
+2. **Install dependencies**
 
-4. Start the server:
-   ```bash
-   npm start
-   ```
+```bash
+npm install
+```
 
-## API Endpoints
+3. **Environment Configuration**
 
-### Market Data
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and update with your details:
+
+```env
+FYERS_APP_ID=your_app_id
+FYERS_SECRET_KEY=your_secret
+FYERS_REDIRECT_URI=http://localhost:4001/broker/auth/callback
+MONGO_URI=mongodb://localhost:27017/brokerDB
+PORT=4001
+```
+
+4. **Seed test user (optional)**
+
+```bash
+node scripts/seed-user.js
+ 
+ test user 
+✅ User created: new ObjectId('67f37ce0e236f91c8da3659e')
+```
+
+5. **Start the server**
+
+```bash
+npm run dev
+```
+
+---
+
+## 📡 API Endpoints
+
+### 🔐 Authentication
+
+#### Get Redirect URL
+
+```
+GET /broker/auth/redirect-url?userId=abc123
+```
+
+Returns a Fyers login URL.
+
+#### Callback from Fyers
+
+```
+GET /broker/auth/callback?auth_code=xyz&state=abc123
+```
+
+Handles token exchange & saves it.
+
+---
+
+### 📊 Market Data
 
 #### Get Historical Data
-```http
-GET /historical
-```
-Query Parameters:
-- `symbol` (string): Trading symbol (e.g., "NSE:TATAMOTORS-EQ")
-- `resolution` (string): Candle interval (e.g., "1D", "1H", "15")
-- `fromDate` (string): Start date (YYYY-MM-DD)
-- `toDate` (string): End date (YYYY-MM-DD)
 
-#### Subscribe to Live Data
-```http
-POST /live/subscribe
 ```
-Body:
-```json
-{
-  "symbols": ["NSE:TATAMOTORS-EQ", "NSE:RELIANCE-EQ"]
-}
+GET /broker/data/historical
 ```
 
-### Order Management
+**Query Params:**
+
+- `userId`
+- `symbol`
+- `resolution`
+- `fromDate`
+- `toDate`
+
+---
+
+### 💰 Orders
 
 #### Place Order
-```http
-POST /orders/place
+
 ```
-Body:
+POST /broker/orders/place
+```
+
+**Body:**
+
 ```json
 {
+  "userId": "abc123",
   "symbol": "NSE:TATAMOTORS-EQ",
-  "quantity": 1,
-  "type": "MARKET",
-  "side": "BUY"
+  "qty": 1,
+  "side": 1,
+  "type": 2,
+  "productType": "INTRADAY"
 }
 ```
 
-#### Modify Order
-```http
-PUT /orders/modify/:orderId
-```
-Body:
-```json
-{
-  "quantity": 2,
-  "price": 500.50
-}
-```
+---
 
-#### Cancel Order
-```http
-DELETE /orders/cancel/:orderId
-```
-
-## Project Structure
+## 🗂️ Project Structure
 
 ```
-src/
-├── auth/
-│   └── auth.js         # Authentication setup
-├── data/
-│   ├── historical.js   # Historical data handling
-│   └── live.js        # Real-time data handling
-├── orders/
-│   └── orders.js      # Order management
-├── config.js          # Configuration
-└── index.js          # Main application entry
+services/broker-integration/
+├── src/
+│   ├── auth/              # Token flow and client setup
+│   ├── data/              # Market data (historical/live)
+│   ├── orders/            # Order placement
+│   ├── users/             # User DB model and logic
+│   ├── utils/             # Scheduler, logging, env updates
+│   ├── config.js
+│   └── index.js           # App entrypoint
+│
+├── scripts/              # DB seeding, admin utilities
+├── tests/                # API tests (auth, data, orders)
+├── .env.example
+├── package.json
+└── README.md
 ```
 
-## Development
+---
 
-### Running Tests
+## 🧪 Development
+
+### Run Tests
+
 ```bash
 npm test
 ```
 
-### Environment Variables
+---
 
-| Variable | Description |
-|----------|-------------|
-| `FYERS_APP_ID` | Your FYERS API application ID |
-| `FYERS_ACCESS_TOKEN` | Access token from FYERS API |
-| `PORT` | Server port (default: 3000) |
+## 🔐 Environment Variables
 
-## Important Notes
+| Key | Description |
+|-----|-------------|
+| `FYERS_APP_ID` | Your app ID from Fyers Developer Portal |
+| `FYERS_SECRET_KEY` | App secret key |
+| `FYERS_REDIRECT_URI` | Must match what’s registered in your Fyers App |
+| `MONGO_URI` | Connection string for MongoDB |
+| `PORT` | API server port |
 
-- Access tokens expire after 24 hours
-- Keep your API credentials secure
-- Test thoroughly in development before live trading
-- Monitor your positions and risk management
-- The application will fail to start if FYERS credentials are not properly configured
-- Check logs directory for API communication logs
+---
 
-## Contributing
+## 📝 Notes
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+- FYERS access tokens are short-lived (valid ~12–24h)
+- Store per-user tokens in DB (we use MongoDB)
+- Integrate this microservice with your main backend to automate trades
+- Test in sandbox or with small positions before going live
 
-## License
+---
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 🙌 Contributing
 
-## Support
+1. Fork this repo
+2. Create feature branch (`git checkout -b feat/your-feature`)
+3. Commit changes (`git commit -m 'feat: add new feature'`)
+4. Push to origin (`git push origin feat/your-feature`)
+5. Open a PR
 
-For API-related queries, refer to:
-- [FYERS API Documentation](https://myapi.fyers.in/docs)
+---
+
+## 📚 Resources
+
+- [FYERS Developer Portal](https://myapi.fyers.in/dashboard)
+- [FYERS API Docs](https://myapi.fyers.in/docs/)
 - [FYERS API Support](https://fyers.in/support)
 
-For project-specific issues:
-- Open an issue in this repository
-- Contact the maintainers
+---
+
+## 📄 License
+
+MIT
