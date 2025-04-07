@@ -145,6 +145,8 @@ npm test
 - Keep your API credentials secure
 - Test thoroughly in development before live trading
 - Monitor your positions and risk management
+- The application will fail to start if FYERS credentials are not properly configured
+- Check logs directory for API communication logs
 
 ## Contributing
 

@@ -1,9 +1,10 @@
-// config.js
+// src/config.js
 require("dotenv").config();
 
-const config = {
-  appId: process.env.FYERS_APP_ID,
-  accessToken: process.env.FYERS_ACCESS_TOKEN,
+module.exports = {
+  port: process.env.PORT || 4001,
+  mongoUri: process.env.MONGO_URI,
+  fyersAppId: process.env.FYERS_APP_ID,
+  fyersSecretKey: process.env.FYERS_SECRET_KEY,
+  fyersRedirectUri: process.env.FYERS_REDIRECT_URI,
 };
-
-module.exports = config;
