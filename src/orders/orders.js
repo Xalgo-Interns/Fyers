@@ -1,50 +1,36 @@
-// orders/orders.js
-const client = require("../auth/auth");
+// src/orders/orders.js
+const { createFyersClient } = require("../auth/fyers-client");
+const { findUserById } = require("../users/user.service");
 
-/**
- * Places a new order
- * @param {Object} order - Order details (e.g., { symbol: 'NSE:TATAMOTORS-EQ', quantity: 10, type: 'BUY' })
- * @returns {Promise<Object>} - Order placement result
- */
-async function placeOrder(order) {
-  try {
-    const result = await client.placeOrder(order);
-    return result;
-  } catch (error) {
-    console.error("Error placing order:", error);
-    throw error;
+async function placeOrder(userId, orderPayload) {
+  const user = await findUserById(userId);
+  const fyers = createFyersClient(
+    process.env.FYERS_APP_ID,
+    user.fyersAccessToken
+  );
+
+  const payload = {
+    symbol: orderPayload.symbol, // e.g., NSE:SBIN-EQ
+    qty: orderPayload.qty, // e.g., 15
+    type: orderPayload.type || 2, // 2 = Market Order
+    side: orderPayload.side, // 1 = Buy, -1 = Sell
+    productType: orderPayload.productType || "INTRADAY",
+    limitPrice: orderPayload.limitPrice || 0,
+    stopPrice: orderPayload.stopPrice || 0,
+    disclosedQty: 0,
+    validity: "DAY",
+    offlineOrder: "False",
+    stopLoss: orderPayload.stopLoss || 0,
+    takeProfit: orderPayload.takeProfit || 0,
+  };
+
+  const response = await fyers.placeOrder(payload);
+
+  if (response.s !== "ok") {
+    throw new Error(response.message || "Order failed");
   }
+
+  return response;
 }
 
-/**
- * Modifies an existing order
- * @param {string} orderId - The ID of the order to modify
- * @param {Object} modifications - Modifications to apply (e.g., { quantity: 5 })
- * @returns {Promise<Object>} - Order modification result
- */
-async function modifyOrder(orderId, modifications) {
-  try {
-    const result = await client.modifyOrder(orderId, modifications);
-    return result;
-  } catch (error) {
-    console.error("Error modifying order:", error);
-    throw error;
-  }
-}
-
-/**
- * Cancels an existing order
- * @param {string} orderId - The ID of the order to cancel
- * @returns {Promise<Object>} - Order cancellation result
- */
-async function cancelOrder(orderId) {
-  try {
-    const result = await client.cancelOrder(orderId);
-    return result;
-  } catch (error) {
-    console.error("Error canceling order:", error);
-    throw error;
-  }
-}
-
-module.exports = { placeOrder, modifyOrder, cancelOrder };
+module.exports = { placeOrder };
