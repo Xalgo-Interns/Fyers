@@ -25,7 +25,11 @@ app.use("/broker/orders", ordersRoutes);
 
 // Health check
 app.get("/health", (req, res) =>
-  res.send("✅ Broker integration microservice is live")
+  res.send("✅ Broker integration Fyers microservice is live")
+);
+
+app.get("/", (req, res) =>
+  res.send({ status: true, message: "Fyers Server is running!" })
 );
 
 // Error handler
