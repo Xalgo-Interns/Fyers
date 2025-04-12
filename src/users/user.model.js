@@ -10,6 +10,7 @@ const userSchema = new mongoose.Schema(
     fyersAccessToken: { type: String },
     fyersAuthCode: { type: String },
     lastTokenRefresh: { type: Date },
+    tokenExpiry: { type: Date }, // Added token expiry field
 
     strategies: [{ type: mongoose.Schema.Types.Mixed }], // can store user-defined algo configs
   },

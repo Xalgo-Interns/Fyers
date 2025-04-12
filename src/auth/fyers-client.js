@@ -1,21 +1,31 @@
 // src/auth/fyers-client.js
-const { fyersModel } = require("fyers-api-v3");
+const { fyersModel, fyersDataSocket } = require("fyers-api-v3");
+const config = require("../config");
 
-function createFyersClient(appId, accessToken) {
-  const client = new fyersModel({
-    path: "./logs",
+function createFyersClient(accessToken) {
+  // Create a new fyers instance with logging enabled
+  const fyers = new fyersModel({
+    path: config.logPath || "./logs",
     enableLogging: true,
   });
 
-  client.setAppId(appId);
+  // Set app ID and access token
+  const appId = config.fyersAppId;
+  fyers.setAppId(appId);
+  fyers.setAccessToken(accessToken);
 
-  const token = accessToken.startsWith(appId + ":")
-    ? accessToken
-    : `${appId}:${accessToken}`;
-
-  client.setAccessToken(token);
-
-  return client;
+  return fyers;
 }
 
-module.exports = { createFyersClient };
+function createWebSocket(accessToken) {
+  const appId = config.fyersAppId;
+  // Create a new websocket connection with the format appId:accessToken
+  const socket = new fyersDataSocket(
+    `${appId}:${accessToken}`,
+    config.logPath || "./logs",
+    true
+  );
+  return socket;
+}
+
+module.exports = { createFyersClient, createWebSocket };
