@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
+    customId: { type: String, unique: true, sparse: true }, // Add this for non-ObjectId user identifiers
     name: String, // optional
     email: { type: String, unique: true, sparse: true }, // optional for future login
     broker: { type: String, enum: ["fyers", "zerodha"], default: "fyers" },
