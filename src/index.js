@@ -36,7 +36,7 @@ app.get("/broker/health", (req, res) =>
 app.get("/", (req, res) =>
   res.send({
     status: true,
-    message: "Fyers Server is running! updated on 13-04-2025  07:20 PM",
+    message: "Fyers Server is running! updated on 13-04-2025  07:27 PM",
   })
 );
 

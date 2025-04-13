@@ -4,6 +4,7 @@ const router = express.Router();
 const { fyersModel } = require("fyers-api-v3");
 const User = require("../users/user.model");
 const config = require("../config");
+const mongoose = require("mongoose");
 
 /**
  * GET /auth/redirect-url?userId=abc123
@@ -41,7 +42,7 @@ router.get("/callback", async (req, res) => {
 
   // Log the received parameters for debugging
   console.log("Received callback params:", { auth_code, state, s, code });
-  
+
   if (!auth_code) {
     return res.status(400).send("Missing auth_code parameter");
   }
@@ -61,40 +62,50 @@ router.get("/callback", async (req, res) => {
       throw new Error(response?.message || "Failed to generate access token");
     }
 
-    // If state is a valid user ID, use it - otherwise use a default or handle it
+    // If state is a valid MongoDB ObjectId, use it as userId
     let userId = state;
-    
-    // Validate if the userId exists and is valid
-    try {
-      const userExists = await User.exists({ _id: userId });
-      if (!userExists) {
-        // Handle case where userId doesn't exist
-        console.warn(`User ID from state parameter doesn't exist: ${userId}`);
-        // You might want to:
-        // 1. Create a new user
-        // 2. Use a default user
-        // 3. Show an error
+    let userDocument = null;
+    let isValidObjectId = mongoose.Types.ObjectId.isValid(userId);
+
+    if (isValidObjectId) {
+      try {
+        userDocument = await User.findById(userId);
+      } catch (error) {
+        console.error("Error retrieving user by ID:", error);
+        isValidObjectId = false; // Reset if lookup failed
       }
-    } catch (error) {
-      console.error("Error validating user ID:", error);
-      // Fallback to a default user or show error
     }
 
-    // Save token to user record
-    await User.findOneAndUpdate(
-      { _id: userId },
-      {
+    if (!isValidObjectId || !userDocument) {
+      console.warn(
+        `Invalid or non-existent user ID: ${userId}. Creating a new user.`
+      );
+      // Create a new user document instead
+      const newUser = new User({
         fyersAccessToken: response.access_token,
         fyersAuthCode: auth_code,
         broker: "fyers",
         lastTokenRefresh: new Date(),
-        tokenExpiry: new Date(Date.now() + 23 * 60 * 60 * 1000), // Setting expiry to ~23 hours
-      },
-      { upsert: true, new: true } // Create if doesn't exist
-    );
+        tokenExpiry: new Date(Date.now() + 23 * 60 * 60 * 1000),
+      });
+
+      userDocument = await newUser.save();
+      userId = userDocument._id;
+
+      console.log(`Created new user with ID: ${userId}`);
+    } else {
+      // Update existing user
+      userDocument.fyersAccessToken = response.access_token;
+      userDocument.fyersAuthCode = auth_code;
+      userDocument.broker = "fyers";
+      userDocument.lastTokenRefresh = new Date();
+      userDocument.tokenExpiry = new Date(Date.now() + 23 * 60 * 60 * 1000);
+
+      await userDocument.save();
+    }
 
     res.send(
-      "✅ Token received and saved successfully. You can now use the platform."
+      `✅ Token received and saved successfully for user ${userId}. You can now use the platform.`
     );
   } catch (err) {
     console.error("❌ Token exchange error:", err);
