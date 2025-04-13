@@ -24,12 +24,12 @@ app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use("/auth", authRoutes); // Authentication routes (no auth required)
-app.use("/data", authenticate, dataRoutes); // Data routes (auth required)
+app.use("/broker/auth", authRoutes); // Authentication routes (no auth required)
+app.use("/broker/data", authenticate, dataRoutes); // Data routes (auth required)
 app.use("/broker/orders", ordersRoutes);
 
 // Health check
-app.get("/health", (req, res) =>
+app.get("/broker/health", (req, res) =>
   res.send("✅ Broker integration Fyers microservice is live")
 );
 
