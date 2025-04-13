@@ -7,6 +7,15 @@ const config = require("./config");
 const errorHandler = require("./utils/errorHandler");
 const bodyParser = require("body-parser");
 const { authenticate } = require("./middleware/auth.middleware");
+const fs = require("fs");
+const path = require("path");
+
+// Ensure logs directory exists
+const logDir = path.join(__dirname, "../logs");
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+  console.log(`Created logs directory at ${logDir}`);
+}
 
 // Routes
 const authRoutes = require("./auth/auth.routes");
@@ -54,8 +63,6 @@ app.use(errorHandler);
 // Connect to MongoDB and start server
 mongoose
   .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
     ssl: true, // enforce SSL
     tlsAllowInvalidCertificates: false, // ensure certificates are validated properly
   })

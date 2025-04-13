@@ -1,10 +1,39 @@
-// src/data/data.routes.js
 const express = require("express");
 const router = express.Router();
 const { fetchHistoricalData } = require("./historical");
 const { getQuotes, getMarketDepth, getUserProfile } = require("./data.service");
-const { subscribeToLiveData } = require("./live");
+const {
+  subscribeToLiveData,
+  marketDataEvents,
+  CONNECTION_STATES,
+} = require("./live");
 const { findUserById } = require("../users/user.service");
+
+// Setup WebSocket monitoring
+function setupWebSocketMonitoring(userId) {
+  // Monitor connection state changes
+  marketDataEvents.on(`${userId}:state`, (state) => {
+    console.log(`WebSocket state for ${userId}:`, state);
+    if (state === CONNECTION_STATES.ERROR) {
+      console.error(`Critical: WebSocket error state for user ${userId}`);
+    }
+  });
+
+  // Monitor errors
+  marketDataEvents.on(`${userId}:error`, (error) => {
+    console.error(`WebSocket error for ${userId}:`, error);
+  });
+
+  // Monitor disconnections
+  marketDataEvents.on(`${userId}:disconnected`, () => {
+    console.log(`WebSocket disconnected for ${userId}`);
+  });
+
+  // Monitor max retries reached
+  marketDataEvents.on(`${userId}:max_retries_reached`, () => {
+    console.error(`WebSocket max retries reached for ${userId}`);
+  });
+}
 
 /**
  * GET /data/historical?userId=abc123&symbol=NSE:SBIN-EQ&resolution=1D&fromDate=2024-04-01&toDate=2024-04-05
@@ -134,39 +163,60 @@ router.get("/profile", async (req, res) => {
  */
 router.post("/live-feed", async (req, res) => {
   try {
-    const { userId } = req.user; // Assuming authentication middleware
+    const { userId } = req.user;
     const { symbols } = req.body;
 
-    if (!symbols || !Array.isArray(symbols) || symbols.length === 0) {
+    // Improved validation
+    if (!symbols?.length) {
       return res.status(400).json({
         success: false,
-        error: "Please provide an array of symbols to subscribe to",
+        error: "Please provide symbols to subscribe to",
       });
     }
 
-    // Get the user to retrieve their access token
+    // Validate symbol format
+    const invalidSymbols = symbols.filter(
+      (s) => !s.includes(":") || !s.endsWith("-EQ")
+    );
+    if (invalidSymbols.length) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid symbol format: ${invalidSymbols.join(
+          ", "
+        )}. Expected format: NSE:SYMBOL-EQ`,
+      });
+    }
+
     const user = await findUserById(userId);
-    if (!user.fyersAccessToken) {
+    if (!user?.fyersAccessToken) {
       return res.status(401).json({
         success: false,
         error: "User not authenticated with Fyers",
       });
     }
 
-    // Start the WebSocket connection and subscribe to the symbols
+    // Setup WebSocket monitoring for this user
+    setupWebSocketMonitoring(userId);
+
+    // Start the WebSocket connection
     const connection = subscribeToLiveData(
       userId,
       user.fyersAccessToken,
       symbols
     );
 
+    // Return detailed connection info
     res.json({
       success: true,
       message: "Live feed started",
-      subscribedSymbols: connection.subscribedSymbols,
+      data: {
+        subscribedSymbols: connection.subscribedSymbols,
+        connectionState: connection.getState(),
+        userId: userId,
+      },
     });
   } catch (error) {
-    console.error("Error starting live feed:", error);
+    console.error(`Live feed error for user ${req.user?.userId}:`, error);
     res.status(500).json({
       success: false,
       error: error.message || "Failed to start live feed",
@@ -179,43 +229,58 @@ router.post("/live-feed", async (req, res) => {
  * Stop a live data feed
  */
 router.delete("/live-feed", async (req, res) => {
-  try {
-    const { userId } = req.user; // Assuming authentication middleware
-    const { symbols } = req.body;
+  const { userId } = req.user;
+  const { symbols } = req.body;
 
-    // Get all active connections
+  try {
     const activeConnections = require("./live").getActiveConnections();
 
-    // Check if user has an active connection
     if (!activeConnections.includes(userId)) {
       return res.status(404).json({
         success: false,
-        error: "No active live feed found for this user",
+        error: "No active live feed found",
       });
     }
 
-    // Get the connection
-    const connections = require("./live").activeConnections;
-    const connection = connections.get(userId);
+    const connection = require("./live").activeConnections.get(userId);
 
-    if (symbols && Array.isArray(symbols) && symbols.length > 0) {
-      // Only unsubscribe from specific symbols
+    if (symbols?.length) {
+      // Validate symbols before unsubscribing
+      const invalidSymbols = symbols.filter(
+        (s) => !connection.subscribedSymbols.includes(s)
+      );
+      if (invalidSymbols.length) {
+        return res.status(400).json({
+          success: false,
+          error: `Not subscribed to symbols: ${invalidSymbols.join(", ")}`,
+        });
+      }
+
       connection.removeSymbols(symbols);
       res.json({
         success: true,
         message: "Unsubscribed from specified symbols",
-        remainingSymbols: connection.subscribedSymbols,
+        data: {
+          removedSymbols: symbols,
+          remainingSymbols: connection.subscribedSymbols,
+          connectionState: connection.getState(),
+        },
       });
     } else {
-      // Close the entire connection
       connection.close();
+      // Remove all event listeners
+      marketDataEvents.removeAllListeners(`${userId}:state`);
+      marketDataEvents.removeAllListeners(`${userId}:error`);
+      marketDataEvents.removeAllListeners(`${userId}:disconnected`);
+      marketDataEvents.removeAllListeners(`${userId}:max_retries_reached`);
+
       res.json({
         success: true,
-        message: "Live feed stopped",
+        message: "Live feed stopped and cleaned up",
       });
     }
   } catch (error) {
-    console.error("Error stopping live feed:", error);
+    console.error(`Error stopping live feed for ${userId}:`, error);
     res.status(500).json({
       success: false,
       error: error.message || "Failed to stop live feed",

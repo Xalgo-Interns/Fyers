@@ -9,7 +9,7 @@ const config = require("../config");
  * @param {string} resolution - Candle resolution (e.g. "1", "5", "D" for day)
  * @param {string} fromDate - Start date in YYYY-MM-DD format
  * @param {string} toDate - End date in YYYY-MM-DD format
- * @returns {Promise<Array>} - Array of OHLCV candles
+ * @returns {Promise<Object>} - Historical data object with candles
  */
 async function fetchHistoricalData(
   userId,
@@ -25,35 +25,41 @@ async function fetchHistoricalData(
 
   const fyers = createFyersClient(user.fyersAccessToken);
 
-  // Convert dates to UNIX timestamps
-  const fromTimestamp = Math.floor(new Date(fromDate).getTime() / 1000);
-  const toTimestamp = Math.floor(new Date(toDate).getTime() / 1000);
+  // Normalize resolution format
+  // If 'D' or '1D' is passed, use 'D' as required by Fyers API
+  const normalizedResolution = resolution.endsWith("D") ? "D" : resolution;
 
-  // Prepare parameters according to V3 API documentation
+  console.log(
+    `Fetching historical data for ${symbol} from ${fromDate} to ${toDate}`
+  );
+
+  // According to the error message, when date_format is 1,
+  // the Fyers API expects dates in YYYY-MM-DD format, not timestamps
   const historyParams = {
     symbol,
-    resolution,
-    date_format: "1", // UNIX timestamp
-    range_from: fromTimestamp,
-    range_to: toTimestamp,
+    resolution: normalizedResolution,
+    date_format: "1",
+    range_from: fromDate, // Use the YYYY-MM-DD format directly
+    range_to: toDate, // Use the YYYY-MM-DD format directly
     cont_flag: "1", // Continuous data
   };
 
   try {
+    console.log("Sending request with params:", JSON.stringify(historyParams));
     const result = await fyers.getHistory(historyParams);
 
-    if (result.s !== "ok") {
-      throw new Error(result.message || "Failed to fetch historical data");
+    if (!result || result.s !== "ok") {
+      throw new Error(result?.message || "Failed to fetch historical data");
     }
 
     // Format the data for easier consumption
     return {
       candles: result.candles,
-      symbol: result.symbol,
-      resolution: result.resolution,
+      symbol: symbol,
+      resolution: normalizedResolution,
     };
   } catch (err) {
-    console.error("Historical data fetch error:", err);
+    console.error("Historical data fetch error details:", err);
     throw new Error(`Failed to fetch historical data: ${err.message}`);
   }
 }
