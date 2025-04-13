@@ -33,14 +33,17 @@ router.get("/redirect-url", (req, res) => {
 });
 
 /**
- * GET /auth/callback?auth_code=xyz&state=userId
+ * GET /auth/callback
  * Callback from Fyers after user logs in
  */
 router.get("/callback", async (req, res) => {
-  const { auth_code, state: userId } = req.query;
+  const { auth_code, state, s, code } = req.query;
 
-  if (!auth_code || !userId) {
-    return res.status(400).send("Missing auth_code or user ID");
+  // Log the received parameters for debugging
+  console.log("Received callback params:", { auth_code, state, s, code });
+  
+  if (!auth_code) {
+    return res.status(400).send("Missing auth_code parameter");
   }
 
   try {
@@ -58,14 +61,37 @@ router.get("/callback", async (req, res) => {
       throw new Error(response?.message || "Failed to generate access token");
     }
 
+    // If state is a valid user ID, use it - otherwise use a default or handle it
+    let userId = state;
+    
+    // Validate if the userId exists and is valid
+    try {
+      const userExists = await User.exists({ _id: userId });
+      if (!userExists) {
+        // Handle case where userId doesn't exist
+        console.warn(`User ID from state parameter doesn't exist: ${userId}`);
+        // You might want to:
+        // 1. Create a new user
+        // 2. Use a default user
+        // 3. Show an error
+      }
+    } catch (error) {
+      console.error("Error validating user ID:", error);
+      // Fallback to a default user or show error
+    }
+
     // Save token to user record
-    await User.findByIdAndUpdate(userId, {
-      fyersAccessToken: response.access_token,
-      fyersAuthCode: auth_code,
-      broker: "fyers",
-      lastTokenRefresh: new Date(),
-      tokenExpiry: new Date(Date.now() + 23 * 60 * 60 * 1000), // Setting expiry to ~23 hours
-    });
+    await User.findOneAndUpdate(
+      { _id: userId },
+      {
+        fyersAccessToken: response.access_token,
+        fyersAuthCode: auth_code,
+        broker: "fyers",
+        lastTokenRefresh: new Date(),
+        tokenExpiry: new Date(Date.now() + 23 * 60 * 60 * 1000), // Setting expiry to ~23 hours
+      },
+      { upsert: true, new: true } // Create if doesn't exist
+    );
 
     res.send(
       "✅ Token received and saved successfully. You can now use the platform."
