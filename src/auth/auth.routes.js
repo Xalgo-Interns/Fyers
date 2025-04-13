@@ -12,13 +12,25 @@ const mongoose = require("mongoose");
  */
 router.get("/redirect-url", (req, res) => {
   const { userId } = req.query;
-  console.log(`Generating redirect URL for user ID: ${userId}`);
-  
-  // Make sure you're using this userId as the state parameter in your redirect URL
-  const redirectUrl = `${config.fyersUrl}?client_id=${config.fyersAppId}&redirect_uri=${config.fyersRedirectUrl}&response_type=code&state=${userId}`;
-  
-  console.log(`Redirect URL created: ${redirectUrl}`);
-  res.json({ redirectUrl });
+  if (!userId)
+    return res.status(400).json({ success: false, error: "Missing userId" });
+
+  try {
+    // Create a new fyers instance using the official structure
+    const fyers = new fyersModel();
+
+    // Configure the fyers instance
+    fyers.setAppId(config.fyersAppId);
+    fyers.setRedirectUrl(config.fyersRedirectUri);
+
+    // Generate auth URL with user ID as the state parameter
+    const authUrl = fyers.generateAuthCode(userId);
+
+    res.json({ success: true, url: authUrl, userId });
+  } catch (err) {
+    console.error("Error generating redirect URL:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 /**
@@ -63,17 +75,21 @@ router.get("/callback", async (req, res) => {
       } catch (error) {
         console.error("Error retrieving user by ID:", error);
       }
-    } 
-    
+    }
+
     // If we still don't have a user (not a valid ObjectId or user not found)
     if (!userDocument) {
-      console.log("User not found by ObjectId, checking if userId is a custom identifier");
-      
+      console.log(
+        "User not found by ObjectId, checking if userId is a custom identifier"
+      );
+
       // Try to find by customId field
       userDocument = await User.findOne({ customId: userId });
-      
+
       if (!userDocument) {
-        console.warn(`No existing user found for ID: ${userId}. Creating a new user.`);
+        console.warn(
+          `No existing user found for ID: ${userId}. Creating a new user.`
+        );
         // Create a new user document
         const newUser = new User({
           customId: userId, // Store the original userId as a custom field
@@ -102,4 +118,11 @@ router.get("/callback", async (req, res) => {
     console.log(`Updated user ${userDocument._id} with new access token`);
 
     res.send(
-      `✅ Token received and saved successfully for user ${userId}. You can now use the platform.`    );  } catch (err) {    console.error("❌ Token exchange error:", err);    res.status(500).send("❌ Token exchange failed: " + err.message);  }});module.exports = router;
+      `✅ Token received and saved successfully for user ${userId}. You can now use the platform.`
+    );
+  } catch (err) {
+    console.error("❌ Token exchange error:", err);
+    res.status(500).send("❌ Token exchange failed: " + err.message);
+  }
+});
+module.exports = router;
