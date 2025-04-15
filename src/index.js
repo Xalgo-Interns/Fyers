@@ -32,6 +32,18 @@ app.use(morgan("dev"));
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Update CSP headers to allow external styles
+app.use((req, res, next) => {
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; connect-src 'self' ws: wss:; script-src 'self'; style-src 'self'"
+  );
+  next();
+});
+
+// Serve static files from public directory
+app.use(express.static("public"));
+
 // Routes
 app.use("/broker/auth", authRoutes); // Authentication routes (no auth required)
 app.use("/broker/data", authenticate, dataRoutes); // Data routes (auth required)
