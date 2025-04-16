@@ -80,6 +80,33 @@ async function startQuoteMonitoring(userId, symbols) {
 }
 
 /**
+ * Start monitoring real-time index data for a user
+ * @param {string} userId - User ID
+ * @param {Array<string>} indices - Array of index symbols to monitor (e.g. ['NSE:NIFTY50-INDEX'])
+ * @returns {Promise<Object>} - Details about the subscription
+ */
+async function startIndexMonitoring(userId, indices) {
+  if (!indices || !Array.isArray(indices) || indices.length === 0) {
+    throw new Error("Please provide valid index symbols to monitor");
+  }
+
+  // Validate that all provided symbols are indices
+  const nonIndexSymbols = indices.filter(
+    (symbol) => !symbol.endsWith("-INDEX")
+  );
+  if (nonIndexSymbols.length > 0) {
+    throw new Error(
+      `Invalid index symbols: ${nonIndexSymbols.join(
+        ", "
+      )}. All symbols must end with -INDEX`
+    );
+  }
+
+  // Reuse the existing quote monitoring logic
+  return startQuoteMonitoring(userId, indices);
+}
+
+/**
  * Get the latest quote data for specified symbols
  * @param {string} userId - User ID
  * @param {Array<string>} symbols - Array of symbols to get quotes for (optional)
@@ -181,10 +208,11 @@ function getActiveMonitors() {
 
 module.exports = {
   startQuoteMonitoring,
+  startIndexMonitoring, // Add the new function to exports
   getLatestQuotes,
   stopQuoteMonitoring,
   getActiveMonitors,
 
   // Helper for routes - useful for debugging in Postman
-  getSubscriptionsCount: () => activeSubscriptions.size
+  getSubscriptionsCount: () => activeSubscriptions.size,
 };

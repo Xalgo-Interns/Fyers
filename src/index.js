@@ -1,91 +1,96 @@
-// src/index.js
 const express = require("express");
 const mongoose = require("mongoose");
 const morgan = require("morgan");
 const helmet = require("helmet");
-const config = require("./config");
-const errorHandler = require("./utils/errorHandler");
 const bodyParser = require("body-parser");
-const { authenticate } = require("./middleware/auth.middleware");
 const fs = require("fs");
 const path = require("path");
 
-// Ensure logs directory exists
-const logDir = path.join(__dirname, "../logs");
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
-  console.log(`Created logs directory at ${logDir}`);
-}
+// Import middlewares
+const { authenticate } = require("./middleware/auth.middleware");
+const errorHandler = require("./utils/errorHandler");
 
-// Routes
+// Import routes
 const authRoutes = require("./auth/auth.routes");
 const dataRoutes = require("./data/data.routes");
 const ordersRoutes = require("./orders/orders.routes");
+const marketDataRoutes = require("./data/market-data.routes");
 
+// Initialize express app
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(helmet());
+// Ensure logs directory exists
+const logDir = path.join(__dirname, "../logs");
+!fs.existsSync(logDir) && fs.mkdirSync(logDir, { recursive: true });
+
+// Security and parsing middleware
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        connectSrc: ["'self'", "ws:", "wss:"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+      },
+    },
+  })
+);
 app.use(express.json());
 app.use(morgan("dev"));
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Update CSP headers to allow external styles
-app.use((req, res, next) => {
-  res.setHeader(
-    "Content-Security-Policy",
-    "default-src 'self'; connect-src 'self' ws: wss:; script-src 'self'; style-src 'self'"
-  );
-  next();
-});
-
-// Serve static files from public directory
 app.use(express.static("public"));
 
-// Routes
-app.use("/broker/auth", authRoutes); // Authentication routes (no auth required)
-app.use("/broker/data", authenticate, dataRoutes); // Data routes (auth required)
-app.use("/broker/orders", ordersRoutes);
+// API Routes
+app.use("/broker/auth", authRoutes);
+app.use("/broker/data", authenticate, dataRoutes);
+app.use("/broker/orders", authenticate, ordersRoutes);
+app.use("/broker/market", authenticate, marketDataRoutes);
 
-// Health check
-app.get("/broker/health", (req, res) =>
+// Health check endpoints
+app.get("/broker/health", (_, res) =>
   res.send("✅ Broker integration Fyers microservice is live")
 );
-
-app.get("/", (req, res) =>
-  res.send({
+app.get("/", (_, res) =>
+  res.json({
     status: true,
-    message: "Fyers Server is running! updated on 13-04-2025  07:57 PM",
+    message: `Fyers Server is running! Last updated: ${new Date().toLocaleString()}`,
   })
 );
 
-// Error handler
+// Error handling
+app.use(errorHandler);
 app.use((err, req, res, next) => {
-  console.error("Global error:", err);
+  console.error("❌ Global error:", err);
   res.status(500).json({
     success: false,
-    error: "Server error: " + (err.message || "Unknown error"),
+    error: `Server error: ${err.message || "Unknown error"}`,
   });
 });
 
-app.use(errorHandler);
-
-// Connect to MongoDB and start server
-mongoose
-  .connect(process.env.MONGO_URI, {
-    ssl: true, // enforce SSL
-    tlsAllowInvalidCertificates: false, // ensure certificates are validated properly
-  })
-
-  .then(() => {
+// Database connection and server startup
+async function startServer() {
+  try {
+    await mongoose.connect(process.env.MONGO_URI, {
+      ssl: true,
+      tlsAllowInvalidCertificates: false,
+    });
     console.log("✅ MongoDB connected");
-    app.listen(PORT, () =>
-      console.log(`🚀 Server running at http://localhost:${PORT}`)
-    );
-  })
-  .catch((err) => {
-    console.error("❌ Failed to connect MongoDB:", err.message);
+
+    app.listen(PORT, () => {
+      console.log(`
+🚀 Server started successfully
+📍 Local:   http://localhost:${PORT}
+🔒 Mode:    ${process.env.NODE_ENV || "development"}
+⏱  Started: ${new Date().toLocaleString()}
+      `);
+    });
+  } catch (err) {
+    console.error("❌ Failed to start server:", err.message);
     process.exit(1);
-  });
+  }
+}
+
+startServer();
